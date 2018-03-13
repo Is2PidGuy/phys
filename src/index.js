@@ -1,4 +1,6 @@
 
+import keys from './keys';
+
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -46,11 +48,12 @@ class Rect {
     }
 }
 
-const drawLine = (a, b, color = 'black') => {
+const drawLine = (a, b, color = 'black', width = 1) => {
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.strokeStyle = color;
+    ctx.lineWidth = width;
     ctx.stroke();
 };
 
@@ -76,6 +79,8 @@ const checkCollision = (rect, ball) => {
     const pts = rect.points;
     let minp = 9999999;
     let paxis;
+    let a;
+    let b;
     let md = 1e15;
     let pt = 0;
     for (let i = 0; i < pts.length; i += 1) {
@@ -94,6 +99,8 @@ const checkCollision = (rect, ball) => {
             pt = i;
         }
         if (i === 0) {
+            a = pts[i];
+            b = pts[n];
             minp = p;
             paxis = axis;
         }
@@ -107,13 +114,15 @@ const checkCollision = (rect, ball) => {
     if (pen < minp) {
         minp = pen;
         paxis = axis;
+        a = { x: ball.x, y: ball.y };
+        b = a;
     }
-    return { axis: paxis, penetration: minp };
+    return { axis: paxis, penetration: minp, a, b };
 };
 
 const generateTerrain = (N, start, curve = 'down') => {
     const f1 = () => 30;
-    const f2 = () => Math.random() * 30;
+    const f2 = () => Math.random() * 30 + 10;
     const param = curve === 'down' ? ({ dx: f1, dy: f2 }) : ({ dx: f2, dy: () => -f2() });
     const points = [];
     let x = start.x;
@@ -134,20 +143,25 @@ pts = pts.concat(generateTerrain(30, pts[pts.length - 1], 'up'));
 const ball = new Ball(300, 300, 50);
 setInterval(
     () => {
-        ball.vel.y += 0.1;
-        ball.x += ball.vel.x;
-        ball.y += ball.vel.y;
         if (keys['ArrowLeft']) {
             ball.vel.x -= 0.2;
         }
         if (keys['ArrowRight']) {
             ball.vel.x += 0.2;
         }
+        if (keys[' ']) {
+            ball.vel.y -= 1;
+        }
+        ball.vel.y += 0.1;
+        ball.vel.x *= 0.99;
+        ball.vel.y *= 0.99;
+        ball.x += ball.vel.x;
+        ball.y += ball.vel.y;
         drawRect({ x: w / 2, y: h / 2, w, h }, 'silver');
         for (let i = 1; i < pts.length; i += 1) {
-            drawLine(pts[i - 1], pts[i]);
+            drawLine(pts[i - 1], pts[i], 'black', 3);
         }
-        let ref = false;
+        const lns = [];
         for (let i = 1; i < pts.length; i += 1) {
             const coll = checkCollision(
                 new Rect(
@@ -159,27 +173,24 @@ setInterval(
                 ball,
             );
             if (coll) {
+                lns.push({ a: coll.a, b: coll.b });
                 const { axis, penetration } = coll;
                 ball.x += axis.x * penetration;
                 ball.y += axis.y * penetration;
-                const nm = axis.x * ball.vel.x + axis.y * ball.vel.y;
-                ball.vel.x -= 1.8 * nm * axis.x;
-                ball.vel.y -= 1.8 * nm * axis.y;
+                let nm = axis.x * ball.vel.x + axis.y * ball.vel.y;
+                if (nm < 0) {
+                    ball.vel.x -= 1.8 * nm * axis.x;
+                    ball.vel.y -= 1.8 * nm * axis.y;
+                }
             }
         }
         ctx.fillStyle = 'green';
         ctx.beginPath();
         ctx.ellipse(ball.x, ball.y, ball.r, ball.r, 0, 0, 2 * Math.PI);
         ctx.fill();
+        lns.forEach((d) => {
+            drawLine(d.a, d.b, 'white', 3);
+        });
     },
     20,
 );
-
-const keys = {};
-document.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-});
-
-document.addEventListener('keyup', (e) => {
-        keys[e.key] = false;
-});
